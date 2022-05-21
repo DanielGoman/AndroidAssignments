@@ -83,3 +83,21 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+
+tutorial_6_hacks/
+.idea/
+*.json
+*.jar
+*bin
+out
+*.flat
+*.png
+*.ino
+*.apk
+*.txt
+*_launcher_*
+values-*
+*gradle*
+mipmap*
+navigation/
+*.pro
