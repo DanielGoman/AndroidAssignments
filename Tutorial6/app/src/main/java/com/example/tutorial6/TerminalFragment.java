@@ -44,6 +44,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
@@ -72,6 +73,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     boolean isStarted = false;
     public static boolean isSaveNeeded = false;
     public static String file_name;
+    Date startTime = new Date();
 
 
     /*
@@ -174,19 +176,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         sendBtn.setOnClickListener(v -> send(sendText.getText().toString()));
 
         mpLineChart = (LineChart) view.findViewById(R.id.line_chart);
-        lineDataSet1 =  new LineDataSet(emptyDataValues(), "ACC X");
-        lineDataSet2 =  new LineDataSet(emptyDataValues(), "ACC Y");
-        lineDataSet3 =  new LineDataSet(emptyDataValues(), "ACC Z");
+        initData();
 
-        lineDataSet1.setColor(getResources().getColor(R.color.red));
-        lineDataSet2.setColor(getResources().getColor(R.color.green));
-        lineDataSet3.setColor(getResources().getColor(R.color.blue));
-
-        dataSets.add(lineDataSet1);
-        dataSets.add(lineDataSet2);
-        dataSets.add(lineDataSet3);
-
-        data = new LineData(dataSets);
         mpLineChart.setData(data);
         mpLineChart.invalidate();
 
@@ -211,6 +202,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 }
                 else{
                     startStopButton.setText("Stop");
+                    startTime = new Date();
                     isStarted = true;
                 }
             }
@@ -276,17 +268,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         }
     }
 
-    /*
-     * Serial + UI
-     */
-    private String[] clean_str(String[] stringsArr){
-         for (int i = 0; i < stringsArr.length; i++)  {
-             stringsArr[i]=stringsArr[i].replaceAll(" ","");
-        }
-
-
-        return stringsArr;
-    }
     private void connect() {
         try {
             BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -335,27 +316,43 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     private void receive(byte[] message) {
         if(hexEnabled) {
             receiveText.append(TextUtil.toHexString(message) + '\n');
-        } else {
+        }
+        else
+        {
             String msg = new String(message);
             if(newline.equals(TextUtil.newline_crlf) && msg.length() > 0)
             {
                 // don't show CR as ^M if directly before LF
-                String msg_to_save = msg;
-                msg_to_save = msg.replace(TextUtil.newline_crlf, TextUtil.emptyString);
+                String msg_to_save = msg.replace(TextUtil.newline_crlf, TextUtil.emptyString);
                 // check message length
                 if (msg_to_save.length() > 1)
                 {
                     // split message string by ',' char
-                    String[] parts = msg_to_save.split(",");
-                    // function to trim blank spaces
-                    parts = clean_str(parts);
+                    String[] parts = msg_to_save.split(", ");
+                    String strAccX = parts[0].split(":")[1];
+                    String strAccY = parts[1].split(":")[1];
+                    String strAccZ = parts[2].split(": ")[1].split(" ")[0];
+
+                    final int millisInSecond = 1000;
+                    Date currentTime = new Date();
+                    float timeDiff = currentTime.getTime() - startTime.getTime();
+                    float elapsedSeconds = timeDiff / millisInSecond;
+
 
                     if (isStarted)
                     {
                         // add received values to line dataset for plotting the linechart
-                        data.addEntry(new Entry(Float.parseFloat(parts[0]),Float.parseFloat(parts[1])),0);
-                        data.addEntry(new Entry(Float.parseFloat(parts[0]),Float.parseFloat(parts[2])),1);
-                        data.addEntry(new Entry(Float.parseFloat(parts[0]),Float.parseFloat(parts[3])),2);
+                        Entry entry1 = new Entry(elapsedSeconds, Float.parseFloat(strAccX));
+                        Entry entry2 = new Entry(elapsedSeconds, Float.parseFloat(strAccY));
+                        Entry entry3 = new Entry(elapsedSeconds, Float.parseFloat(strAccZ));
+
+                        lineDataSet1.addEntry(entry1);
+                        lineDataSet1.addEntry(entry2);
+                        lineDataSet1.addEntry(entry3);
+
+                        data.addEntry(entry1,0);
+                        data.addEntry(entry2,1);
+                        data.addEntry(entry3,2);
 
                         lineDataSet1.notifyDataSetChanged(); // let the data know a dataSet changed
                         mpLineChart.notifyDataSetChanged(); // let the chart know it's data changed
@@ -427,10 +424,17 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     private void resetChart(){
         Toast.makeText(getContext(),"Clear",Toast.LENGTH_SHORT).show();
         LineData data = mpLineChart.getData();
-        for(int i = 0; i < 3; i++) {
+        for(int i = 0; i < 3; i++)
+        {
             ILineDataSet set = data.getDataSetByIndex(i);
-            while(set.removeLast()){}
+            set.clear();
         }
+
+        data = initData();
+        mpLineChart.setData(data);
+        mpLineChart.invalidate();
+
+        startTime = new Date();
     }
 
     private void saveAccelerationData(String file_name, LineDataSet lineDataSet1,
@@ -442,8 +446,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         String csv = data_dir_path + file_name;
 
         List<Entry> values1 = lineDataSet1.getValues();
-        List<Entry> values2 = lineDataSet1.getValues();
-        List<Entry> values3 = lineDataSet1.getValues();
+        List<Entry> values2 = lineDataSet2.getValues();
+        List<Entry> values3 = lineDataSet3.getValues();
 
         try {
             CSVWriter csvWriter = new CSVWriter(new FileWriter(csv,true));
@@ -459,9 +463,29 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
                 csvWriter.writeNext(row);
             }
+            csvWriter.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private LineData initData()
+    {
+        lineDataSet1 =  new LineDataSet(emptyDataValues(), "ACC X");
+        lineDataSet2 =  new LineDataSet(emptyDataValues(), "ACC Y");
+        lineDataSet3 =  new LineDataSet(emptyDataValues(), "ACC Z");
+
+        lineDataSet1.setColor(getResources().getColor(R.color.red));
+        lineDataSet2.setColor(getResources().getColor(R.color.green));
+        lineDataSet3.setColor(getResources().getColor(R.color.blue));
+
+        dataSets.add(lineDataSet1);
+        dataSets.add(lineDataSet2);
+        dataSets.add(lineDataSet3);
+
+        data = new LineData(dataSets);
+
+        return data;
     }
 
 }
