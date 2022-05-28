@@ -16,6 +16,7 @@ import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.method.ScrollingMovementMethod;
 import android.text.style.ForegroundColorSpan;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -66,7 +67,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     private String newline = TextUtil.newline_crlf;
 
     LineChart mpLineChart;
-    LineDataSet lineDataSet1, lineDataSet2, lineDataSet3;
+    public static LineDataSet lineDataSet1, lineDataSet2, lineDataSet3;
     ArrayList<ILineDataSet> dataSets = new ArrayList<>();
     LineData data;
 
@@ -74,6 +75,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public static boolean isSaveNeeded = false;
     public static String file_name;
     Date startTime = new Date();
+    private float totalTime = 0;
 
 
     /*
@@ -135,7 +137,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
         if(isSaveNeeded)
         {
-            saveAccelerationData(file_name, lineDataSet1, lineDataSet2, lineDataSet3);
             resetChart();
             isSaveNeeded = false;
         }
@@ -199,10 +200,13 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 if (isStarted){
                     startStopButton.setText("Start");
                     isStarted = false;
+
+                    totalTime += (new Date()).getTime() - startTime.getTime();
                 }
                 else{
-                    startStopButton.setText("Stop");
                     startTime = new Date();
+                    startStopButton.setText("Stop");
+                    Log.d("timer, startTime", startTime.toString());
                     isStarted = true;
                 }
             }
@@ -224,6 +228,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
                 fragmentTransaction.addToBackStack(null);
 
+                lineDataSet1 = (LineDataSet) data.getDataSetByIndex(0);
+                lineDataSet2 = (LineDataSet) data.getDataSetByIndex(1);
+                lineDataSet3 = (LineDataSet) data.getDataSetByIndex(2);
                 SaveCSVFragment fragment = new SaveCSVFragment();
                 fragmentTransaction.replace(R.id.fragment, fragment).commit();
             }
@@ -335,8 +342,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
                     final int millisInSecond = 1000;
                     Date currentTime = new Date();
+                    Log.d("timer, currTime", currentTime.toString());
                     float timeDiff = currentTime.getTime() - startTime.getTime();
-                    float elapsedSeconds = timeDiff / millisInSecond;
+                    float elapsedSeconds = (totalTime + timeDiff) / millisInSecond;
 
 
                     if (isStarted)
@@ -345,10 +353,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                         Entry entry1 = new Entry(elapsedSeconds, Float.parseFloat(strAccX));
                         Entry entry2 = new Entry(elapsedSeconds, Float.parseFloat(strAccY));
                         Entry entry3 = new Entry(elapsedSeconds, Float.parseFloat(strAccZ));
-
-                        lineDataSet1.addEntry(entry1);
-                        lineDataSet1.addEntry(entry2);
-                        lineDataSet1.addEntry(entry3);
 
                         data.addEntry(entry1,0);
                         data.addEntry(entry2,1);
@@ -423,50 +427,21 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
     private void resetChart(){
         Toast.makeText(getContext(),"Clear",Toast.LENGTH_SHORT).show();
-        LineData data = mpLineChart.getData();
+        LineData currData = mpLineChart.getData();
+
         for(int i = 0; i < 3; i++)
         {
-            ILineDataSet set = data.getDataSetByIndex(i);
+            ILineDataSet set = currData.getDataSetByIndex(i);
             set.clear();
         }
+        currData.clearValues();
+        mpLineChart.clear();
 
         data = initData();
         mpLineChart.setData(data);
         mpLineChart.invalidate();
 
         startTime = new Date();
-    }
-
-    private void saveAccelerationData(String file_name, LineDataSet lineDataSet1,
-                                      LineDataSet lineDataSet2, LineDataSet lineDataSet3)
-    {
-        String data_dir_path = getString(R.string.data_dir_path);
-        File file = new File(data_dir_path);
-        file.mkdirs();
-        String csv = data_dir_path + file_name;
-
-        List<Entry> values1 = lineDataSet1.getValues();
-        List<Entry> values2 = lineDataSet2.getValues();
-        List<Entry> values3 = lineDataSet3.getValues();
-
-        try {
-            CSVWriter csvWriter = new CSVWriter(new FileWriter(csv,true));
-
-            for(int i = 0; i < values1.size(); i++)
-            {
-                String timestamp = String.valueOf(values1.get(i).getX());
-                String acc_x = String.valueOf(values1.get(i).getY());
-                String acc_y = String.valueOf(values2.get(i).getY());
-                String acc_z = String.valueOf(values3.get(i).getY());
-
-                String row[] = new String[]{timestamp, acc_x, acc_y, acc_z};
-
-                csvWriter.writeNext(row);
-            }
-            csvWriter.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 
     private LineData initData()
