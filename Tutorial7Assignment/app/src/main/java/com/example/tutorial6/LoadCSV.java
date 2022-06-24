@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.FloatProperty;
 import android.util.Log;
 import android.view.View;
@@ -99,7 +100,7 @@ public class LoadCSV extends AppCompatActivity {
 
     private ArrayList<String[]> CsvRead(String path){
         int numRedundantLines = 7;
-        int estimatedStepsLine = 5;
+        int estimatedStepsLine = 4;
         ArrayList<String[]> CsvData = new ArrayList<>();
         try {
             File file = new File(path);
@@ -108,6 +109,7 @@ public class LoadCSV extends AppCompatActivity {
             int lineNum = 0;
             while((nextLine = reader.readNext())!= null)
             {
+                Log.d("read_csv", TextUtils.join(" ", nextLine));
                 if(lineNum >= numRedundantLines){
                     CsvData.add(nextLine);
                 }

@@ -11,7 +11,10 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
+import android.widget.Toast;
 
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineDataSet;
 import com.google.android.material.slider.Slider;
 import com.opencsv.CSVWriter;
 
@@ -23,6 +26,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -94,6 +98,11 @@ public class SaveCSVFragment extends Fragment {
                     TerminalFragment.isSaveNeeded = true;
                     TerminalFragment.file_name = full_csv_name;
                     csvWriter.close();
+
+                    LineDataSet lineDataSet1 = TerminalFragment.lineDataSet1;
+                    LineDataSet lineDataSet2 = TerminalFragment.lineDataSet2;
+                    LineDataSet lineDataSet3 = TerminalFragment.lineDataSet3;
+                    saveAccelerationData(full_csv_name, lineDataSet1, lineDataSet2, lineDataSet3);
                 }
                 catch (IOException e) {
                     e.printStackTrace();
@@ -116,5 +125,42 @@ public class SaveCSVFragment extends Fragment {
     private String getCurrentDatetime(){
         Date now = new Date();
         return now.toLocaleString();
+    }
+
+
+    private void saveAccelerationData(String file_name, LineDataSet lineDataSet1,
+                                      LineDataSet lineDataSet2, LineDataSet lineDataSet3)
+    {
+        String data_dir_path = getString(R.string.data_dir_path);
+        File file = new File(data_dir_path);
+        file.mkdirs();
+        String csv = data_dir_path + file_name;
+
+        List<Entry> values1 = lineDataSet1.getValues();
+        List<Entry> values2 = lineDataSet2.getValues();
+        List<Entry> values3 = lineDataSet3.getValues();
+
+        if(values1.size() > 0) {
+            try {
+                CSVWriter csvWriter = new CSVWriter(new FileWriter(csv, true));
+
+                for (int i = 0; i < values1.size(); i++) {
+                    String timestamp = String.valueOf(values1.get(i).getX());
+                    String acc_x = String.valueOf(values1.get(i).getY());
+                    String acc_y = String.valueOf(values2.get(i).getY());
+                    String acc_z = String.valueOf(values3.get(i).getY());
+
+                    String row[] = new String[]{timestamp, acc_x, acc_y, acc_z};
+
+                    csvWriter.writeNext(row);
+                }
+                csvWriter.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        else{
+            Toast.makeText(getActivity(), "No data to save", Toast.LENGTH_SHORT).show();
+        }
     }
 }

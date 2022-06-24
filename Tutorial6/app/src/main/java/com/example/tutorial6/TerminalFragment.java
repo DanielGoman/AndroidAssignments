@@ -228,9 +228,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
                 fragmentTransaction.addToBackStack(null);
 
-                lineDataSet1 = (LineDataSet) data.getDataSetByIndex(0);
-                lineDataSet2 = (LineDataSet) data.getDataSetByIndex(1);
-                lineDataSet3 = (LineDataSet) data.getDataSetByIndex(2);
                 SaveCSVFragment fragment = new SaveCSVFragment();
                 fragmentTransaction.replace(R.id.fragment, fragment).commit();
             }

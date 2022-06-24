@@ -16,6 +16,7 @@ import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.method.ScrollingMovementMethod;
 import android.text.style.ForegroundColorSpan;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -69,7 +70,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
     View view;
     LineChart mpLineChart;
-    LineDataSet lineDataSet1, lineDataSet2, lineDataSet3, lineDataSetN;
+    public static LineDataSet lineDataSet1, lineDataSet2, lineDataSet3, lineDataSetN;
     ArrayList<ILineDataSet> dataSets = new ArrayList<>();
     LineData data;
 
@@ -79,6 +80,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
     boolean isStarted = false;
     Date startTime = new Date();
+    private float totalTime = 0;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -86,7 +88,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         setHasOptionsMenu(true);
         setRetainInstance(true);
         deviceAddress = getArguments().getString("device");
-
     }
 
     @Override
@@ -105,6 +106,13 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         else
             getActivity().startService(new Intent(getActivity(), SerialService.class)); // prevents service destroy on unbind from recreated activity caused by orientation change
     }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // TODO: fill this
+    }
+
 
     @Override
     public void onStop() {
@@ -136,7 +144,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
         if(isSaveNeeded)
         {
-            saveAccelerationData(file_name, lineDataSet1, lineDataSet2, lineDataSet3, lineDataSetN);
             resetChart();
             isSaveNeeded = false;
         }
@@ -201,6 +208,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 if (isStarted){
                     startStopButton.setText("Start");
                     isStarted = false;
+                    totalTime += (new Date()).getTime() - startTime.getTime();
                 }
                 else{
                     startStopButton.setText("Stop");
@@ -222,7 +230,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         saveCSVButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                FragmentActivity activity = Objects.requireNonNull(getActivity());
+                FragmentActivity activity = requireActivity();
                 FragmentManager fragmentManager = activity.getSupportFragmentManager();
                 FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
                 fragmentTransaction.addToBackStack(null);
@@ -343,9 +351,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
                     final int millisInSecond = 1000;
                     Date currentTime = new Date();
+                    Log.d("timer, currTime", currentTime.toString());
                     float timeDiff = currentTime.getTime() - startTime.getTime();
-                    float elapsedSeconds = timeDiff / millisInSecond;
-
+                    float elapsedSeconds = (totalTime + timeDiff) / millisInSecond;
 
                     if (isStarted)
                     {
@@ -356,8 +364,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                         Entry entryN = new Entry(elapsedSeconds, N_val);
 
                         lineDataSet1.addEntry(entry1);
-                        lineDataSet1.addEntry(entry2);
-                        lineDataSet1.addEntry(entry3);
+                        lineDataSet2.addEntry(entry2);
+                        lineDataSet3.addEntry(entry3);
                         lineDataSetN.addEntry(entryN);
 
                         data.addEntry(entryN,0);
@@ -365,13 +373,13 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                         lineDataSet1.notifyDataSetChanged(); // let the data know a dataSet changed
                         mpLineChart.notifyDataSetChanged(); // let the chart know it's data changed
                         mpLineChart.invalidate(); // refresh
-                    }
 
-                    //Updating number of estimated steps
-                    int stepMadeNow = Calculations.estimateStepsMade();
-                    currEstimatedSteps += stepMadeNow;
-                    TextView estimateStepsTV = (TextView) view.findViewById(R.id.estimated_steps_tv);
-                    estimateStepsTV.setText(currEstimatedSteps);
+                        //Updating number of estimated steps
+                        currEstimatedSteps = Calculations.estimateStepsMade(entryN);
+                        TextView estimateStepsTV = (TextView) view.findViewById(R.id.estimated_steps_tv);
+                        estimateStepsTV.setText(String.valueOf(currEstimatedSteps));
+
+                    }
                 }
 
                 msg = msg.replace(TextUtil.newline_crlf, TextUtil.newline_lf);
@@ -440,16 +448,16 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     {
         resetChart();
         resetText();
+        totalTime = 0;
     }
 
     private void resetChart(){
         Toast.makeText(getContext(),"Clear",Toast.LENGTH_SHORT).show();
         LineData data = mpLineChart.getData();
-        for(int i = 0; i < 3; i++)
-        {
-            ILineDataSet set = data.getDataSetByIndex(i);
-            set.clear();
-        }
+        data.getDataSetByIndex(0).clear();
+        lineDataSet1.clear();
+        lineDataSet2.clear();
+        lineDataSet3.clear();
 
         data = initData();
         mpLineChart.setData(data);
@@ -464,38 +472,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         estimatedStepsTV.setText("0");
     }
 
-    private void saveAccelerationData(String file_name, LineDataSet lineDataSet1,
-                                      LineDataSet lineDataSet2, LineDataSet lineDataSet3,
-                                      LineDataSet lineDataSetN)
-    {
-        String data_dir_path = getString(R.string.data_dir_path);
-        File file = new File(data_dir_path);
-        file.mkdirs();
-        String csv = data_dir_path + file_name;
-
-        List<Entry> values1 = lineDataSet1.getValues();
-        List<Entry> values2 = lineDataSet2.getValues();
-        List<Entry> values3 = lineDataSet3.getValues();
-
-        try {
-            CSVWriter csvWriter = new CSVWriter(new FileWriter(csv,true));
-
-            for(int i = 0; i < values1.size(); i++)
-            {
-                String timestamp = String.valueOf(values1.get(i).getX());
-                String acc_x = String.valueOf(values1.get(i).getY());
-                String acc_y = String.valueOf(values2.get(i).getY());
-                String acc_z = String.valueOf(values3.get(i).getY());
-
-                String row[] = new String[]{timestamp, acc_x, acc_y, acc_z};
-
-                csvWriter.writeNext(row);
-            }
-            csvWriter.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     private LineData initData()
     {
@@ -517,10 +493,5 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         data = new LineData(dataSets.get(3));
 
         return data;
-    }
-
-    private int estimateStepsMade()
-    {
-        return 0;
     }
 }
